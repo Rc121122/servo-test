@@ -21,11 +21,13 @@ using namespace httpsserver;
 const char *ssid = "MyESP32_AP";
 const char *password = "esp32password";
 
-const int servoPin = 18;      // GPIO connected to servo signal
+const int servoPin = 19;      // GPIO connected to servo signal
 const int servoMin = 0;       // Servo angle minimum
 const int servoMax = 180;     // Servo angle maximum
 const float tiltMin = -45.0f; // phone tilt min (degrees)
 const float tiltMax = +45.0f; // phone tilt max
+
+const int motorPwmPin = 18;   // GPIO connected to ESC / motor driver input
 
 constexpr uint8_t MAX_WS_CLIENTS = 4;
 
@@ -37,15 +39,32 @@ constexpr int servoPulseMinUs = 500;        // Minimum pulse width
 constexpr int servoPulseMaxUs = 2400;       // Maximum pulse width
 constexpr uint32_t servoPeriodUs = 20000;   // 20 ms period at 50 Hz
 
+// ====== Motor PWM config ======
+constexpr uint8_t motorChannel = 1;
+constexpr uint32_t motorFreq = 20000;       // 20 kHz to keep motor drive quiet
+constexpr uint8_t motorResolution = 12;     // 12-bit resolution for duty control
+constexpr float motorDutyMax = 1.0f;
+constexpr float motorAccelPerMs = 1.0f / 600.0f; // reach full throttle in ~0.6s
+constexpr float motorDecelPerMs = 1.0f / 900.0f; // coast down a bit slower
+constexpr uint32_t motorUpdateIntervalMs = 20;
+
 // ====== Globals ======
 int currentAngle = 90;   // start at center
 float currentTilt = 0.0; // track the last requested tilt
+float motorDuty = 0.0f;
+bool gasPressed = false;
+unsigned long lastMotorUpdateMs = 0;
+float lastBroadcastMotorDuty = -1.0f;
 
 SSLCert cert(serverCertDer, serverCertDerLen, serverKeyDer, serverKeyDerLen);
 HTTPSServer secureServer(&cert, 443, MAX_WS_CLIENTS);
 
 void handleRoot(HTTPRequest *req, HTTPResponse *res);
 void handle404(HTTPRequest *req, HTTPResponse *res);
+void updateMotorControl();
+void writeMotorDuty(float duty);
+void applyHandbrake();
+void broadcastState();
 
 class SteeringWebsocket : public WebsocketHandler {
 public:
@@ -73,6 +92,43 @@ void writeServoAngle(int angle) {
   ledcWrite(servoChannel, duty);
 }
 
+void writeMotorDuty(float duty) {
+  if (duty < 0.0f) duty = 0.0f;
+  if (duty > motorDutyMax) duty = motorDutyMax;
+  const uint32_t maxDuty = (1u << motorResolution) - 1u;
+  const uint32_t pwmValue = static_cast<uint32_t>(duty * maxDuty + 0.5f);
+  ledcWrite(motorChannel, pwmValue);
+}
+
+void applyHandbrake() {
+  gasPressed = false;
+  motorDuty = 0.0f;
+  writeMotorDuty(motorDuty);
+  lastBroadcastMotorDuty = motorDuty;
+  broadcastState();
+}
+
+void updateMotorControl() {
+  const unsigned long now = millis();
+  const unsigned long elapsed = now - lastMotorUpdateMs;
+  if (elapsed < motorUpdateIntervalMs) return;
+  lastMotorUpdateMs = now;
+
+  const float ratePerMs = gasPressed ? motorAccelPerMs : -motorDecelPerMs;
+  float newDuty = motorDuty + ratePerMs * static_cast<float>(elapsed);
+  if (newDuty < 0.0f) newDuty = 0.0f;
+  if (newDuty > motorDutyMax) newDuty = motorDutyMax;
+
+  if (fabsf(newDuty - motorDuty) < 0.0001f) return;
+  motorDuty = newDuty;
+  writeMotorDuty(motorDuty);
+
+  if (fabsf(motorDuty - lastBroadcastMotorDuty) >= 0.01f) {
+    lastBroadcastMotorDuty = motorDuty;
+    broadcastState();
+  }
+}
+
 void broadcastState() {
   for (uint8_t i = 0; i < MAX_WS_CLIENTS; ++i) {
     if (wsClients[i] != nullptr) {
@@ -88,6 +144,11 @@ void setup() {
   ledcSetup(servoChannel, servoFreq, servoResolution);
   ledcAttachPin(servoPin, servoChannel);
   writeServoAngle(currentAngle);
+
+  ledcSetup(motorChannel, motorFreq, motorResolution);
+  ledcAttachPin(motorPwmPin, motorChannel);
+  writeMotorDuty(0.0f);
+  lastMotorUpdateMs = millis();
 
   Serial.print("Setting up AP: ");
   Serial.println(ssid);
@@ -117,6 +178,7 @@ void setup() {
 
 void loop() {
   secureServer.loop();
+  updateMotorControl();
   delay(1);
 }
 
@@ -146,6 +208,10 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
     #status { font-size: 0.9rem; color: #555; }
     #tiltSlider { width: 80%; max-width: 400px; margin: 24px auto; display: block; }
     #angleDisplay { font-size: 1.2rem; margin-top: 12px; }
+    .motor-controls { margin-top: 32px; display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+    button { font-size: 1rem; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; background-color: #1976d2; color: #fff; transition: background-color 0.2s ease; }
+    button:active, button.active { background-color: #1259a0; }
+    #motorDisplay { font-size: 1rem; margin-top: 12px; }
   </style>
 </head>
 <body>
@@ -153,11 +219,26 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
   <p id="status">Connecting…</p>
   <input type="range" min="-45" max="45" step="0.1" value="0" id="tiltSlider">
   <p id="angleDisplay">Angle: 90</p>
+  <div class="motor-controls">
+    <button id="gasButton" type="button">Gas</button>
+    <button id="handbrakeButton" type="button">Handbrake</button>
+  </div>
+  <p id="motorDisplay">Motor duty: 0%</p>
   <script>
     const slider = document.getElementById('tiltSlider');
     const statusEl = document.getElementById('status');
     const angleEl = document.getElementById('angleDisplay');
+    const gasButton = document.getElementById('gasButton');
+    const handbrakeButton = document.getElementById('handbrakeButton');
+    const motorEl = document.getElementById('motorDisplay');
     let ws;
+    let gasHeld = false;
+
+    const sendCommand = (payload) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(payload);
+      }
+    };
 
     function connectWs() {
       const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
@@ -165,7 +246,7 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
 
       ws.onopen = () => {
         statusEl.textContent = 'Connected';
-        ws.send('sync');
+        sendCommand('sync');
       };
 
       ws.onclose = () => {
@@ -187,6 +268,17 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
           if (typeof data.tilt === 'number' && slider !== document.activeElement) {
             slider.value = data.tilt;
           }
+          if (typeof data.motorDuty === 'number') {
+            const pct = Math.round(data.motorDuty * 100);
+            motorEl.textContent = `Motor duty: ${pct}%`;
+          }
+          if (typeof data.gas === 'boolean') {
+            if (data.gas) {
+              gasButton.classList.add('active');
+            } else {
+              gasButton.classList.remove('active');
+            }
+          }
         } catch (err) {
           console.error('Invalid payload', err);
         }
@@ -194,9 +286,41 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
     }
 
     slider.addEventListener('input', () => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(slider.value);
+      sendCommand(slider.value);
+    });
+
+    const engageGas = () => {
+      if (!gasHeld) {
+        gasHeld = true;
+        gasButton.classList.add('active');
+        sendCommand('gas_on');
       }
+    };
+
+    const releaseGas = () => {
+      if (gasHeld) {
+        gasHeld = false;
+        gasButton.classList.remove('active');
+        sendCommand('gas_off');
+      }
+    };
+
+    gasButton.addEventListener('mousedown', engageGas);
+    gasButton.addEventListener('touchstart', (evt) => {
+      evt.preventDefault();
+      engageGas();
+    }, { passive: false });
+
+    const releaseEvents = ['mouseup', 'mouseleave', 'touchend', 'touchcancel', 'pointerup', 'pointercancel'];
+    releaseEvents.forEach((eventName) => {
+      window.addEventListener(eventName, releaseGas);
+    });
+
+    window.addEventListener('blur', releaseGas);
+
+    handbrakeButton.addEventListener('click', () => {
+      releaseGas();
+      sendCommand('handbrake');
     });
 
     connectWs();
@@ -227,7 +351,7 @@ void SteeringWebsocket::onClose() {
 
 void SteeringWebsocket::sendState() {
   char payload[64];
-  snprintf(payload, sizeof(payload), "{\"angle\":%d,\"tilt\":%.2f}", currentAngle, currentTilt);
+  snprintf(payload, sizeof(payload), "{\"angle\":%d,\"tilt\":%.2f,\"motorDuty\":%.3f,\"gas\":%s}", currentAngle, currentTilt, motorDuty, gasPressed ? "true" : "false");
   send(std::string(payload), WebsocketHandler::SEND_TYPE_TEXT);
 }
 
@@ -238,6 +362,27 @@ void SteeringWebsocket::onMessage(WebsocketInputStreambuf *input) {
 
   if (message == "sync") {
     sendState();
+    return;
+  }
+
+  if (message == "gas_on") {
+    if (!gasPressed) {
+      gasPressed = true;
+      broadcastState();
+    }
+    return;
+  }
+
+  if (message == "gas_off") {
+    if (gasPressed) {
+      gasPressed = false;
+      broadcastState();
+    }
+    return;
+  }
+
+  if (message == "handbrake") {
+    applyHandbrake();
     return;
   }
 
