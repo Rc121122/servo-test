@@ -210,7 +210,7 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
     #angleDisplay { font-size: 1.2rem; margin-top: 12px; }
     .gyro-section { margin-top: 16px; }
     .gyro-section button { margin-top: 12px; }
-    #gyroStatus { font-size: 0.9rem; color: #444; margin-top: 8px; }
+    #gyroStatus { font-size: 0.9rem; color: #444; margin-top: 8px; min-height: 1.2rem; }
     .motor-controls { margin-top: 32px; display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
     button { font-size: 1rem; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; background-color: #1976d2; color: #fff; transition: background-color 0.2s ease; }
     button:active, button.active { background-color: #1259a0; }
@@ -223,8 +223,8 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
   <input type="range" min="-45" max="45" step="0.1" value="0" id="tiltSlider">
   <p id="angleDisplay">Angle: 90</p>
   <div class="gyro-section">
-    <button id="gyroButton" type="button">Enable Gyro Control</button>
-    <p id="gyroStatus">Use the slider or enable gyro control.</p>
+    <button id="gyroButton" type="button">Zero Gyro</button>
+    <p id="gyroStatus">Tap “Zero Gyro” to grant access and calibrate the current wheel position.</p>
   </div>
   <div class="motor-controls">
     <button id="gasButton" type="button">Gas</button>
@@ -243,7 +243,10 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
     let ws;
     let gasHeld = false;
     let gyroEnabled = false;
+    let gyroRequestInFlight = false;
     let lastTiltSent = parseFloat(slider.value);
+    let lastRawWheel = 0;
+    let gyroZeroOffset = 0;
 
     const sendCommand = (payload) => {
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -253,10 +256,35 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
 
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+    const isLandscapeOrientation = () => {
+      if (window.screen && window.screen.orientation && typeof window.screen.orientation.angle === 'number') {
+        return Math.abs(window.screen.orientation.angle) === 90;
+      }
+      if (typeof window.orientation === 'number') {
+        return Math.abs(window.orientation) === 90;
+      }
+      return window.innerWidth > window.innerHeight;
+    };
+
+    const computeWheelRotation = (event) => {
+      // Use beta when in landscape so tilting like a steering wheel maps naturally.
+      if (isLandscapeOrientation() && typeof event.beta === 'number') {
+        return event.beta;
+      }
+      if (typeof event.gamma === 'number') {
+        return event.gamma;
+      }
+      if (typeof event.beta === 'number') {
+        return event.beta;
+      }
+      return 0;
+    };
+
     const handleOrientation = (event) => {
       if (!gyroEnabled) return;
-      const rawTilt = typeof event.gamma === 'number' ? event.gamma : (typeof event.beta === 'number' ? event.beta : 0);
-      const tilt = clamp(rawTilt, -45, 45);
+      const rawWheel = computeWheelRotation(event);
+      lastRawWheel = rawWheel;
+      const tilt = clamp(rawWheel - gyroZeroOffset, -45, 45);
       if (Math.abs(tilt - lastTiltSent) < 0.5) return;
       slider.value = tilt.toFixed(1);
       lastTiltSent = tilt;
@@ -267,34 +295,75 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
       if (gyroEnabled) return;
       window.addEventListener('deviceorientation', handleOrientation);
       gyroEnabled = true;
-      gyroButton.textContent = 'Gyro Enabled';
-      gyroButton.disabled = true;
-      gyroStatusEl.textContent = 'Gyro control active. Tilt your device to steer.';
+      gyroStatusEl.textContent = 'Gyro ready. Tap “Zero Gyro” to re-center the steering wheel.';
     };
 
-    const requestGyroAccess = () => {
-      if (gyroEnabled) return;
-      if (typeof DeviceOrientationEvent === 'undefined') {
-        gyroStatusEl.textContent = 'Device orientation not supported on this browser.';
-        return;
-      }
+    const ensureGyroAccess = () => {
+      if (gyroEnabled) return Promise.resolve();
+      if (gyroRequestInFlight) return Promise.reject(new Error('pending'));
+      gyroRequestInFlight = true;
+      gyroStatusEl.textContent = 'Requesting motion access…';
 
-      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission()
-          .then((state) => {
-            if (state === 'granted') {
-              startGyroStream();
-            } else {
-              gyroStatusEl.textContent = 'Gyro permission denied. Use the slider instead.';
-            }
-          })
-          .catch((err) => {
-            console.error('Gyro permission error', err);
-            gyroStatusEl.textContent = 'Unable to access gyro. Check browser settings.';
-          });
-      } else {
-        startGyroStream();
-      }
+      return new Promise((resolve, reject) => {
+        if (typeof DeviceOrientationEvent === 'undefined') {
+          gyroRequestInFlight = false;
+          reject(new Error('unsupported'));
+          return;
+        }
+
+        const onGranted = () => {
+          gyroRequestInFlight = false;
+          startGyroStream();
+          resolve();
+        };
+
+        const onDenied = (err) => {
+          gyroRequestInFlight = false;
+          reject(err);
+        };
+
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+          DeviceOrientationEvent.requestPermission()
+            .then((state) => {
+              if (state === 'granted') {
+                onGranted();
+              } else {
+                onDenied(new Error('denied'));
+              }
+            })
+            .catch(onDenied);
+        } else {
+          onGranted();
+        }
+      });
+    };
+
+    const zeroGyro = () => {
+      gyroZeroOffset = lastRawWheel;
+      gyroStatusEl.textContent = 'Gyro zeroed. Rotate in landscape like a steering wheel to steer.';
+    };
+
+    const requestAndZero = () => {
+      ensureGyroAccess()
+        .then(() => {
+          zeroGyro();
+        })
+        .catch((err) => {
+          console.error('Gyro access error', err);
+          if (err && err.message === 'unsupported') {
+            gyroStatusEl.textContent = 'Device orientation not supported. Use the slider instead.';
+          } else if (err && err.message === 'denied') {
+            gyroStatusEl.textContent = 'Motion access denied. Check Safari Settings ▸ Motion & Orientation.';
+          } else if (err && err.message === 'pending') {
+            gyroStatusEl.textContent = 'Motion access already requested…';
+          } else {
+            gyroStatusEl.textContent = 'Unable to start gyro. Try again.';
+          }
+        });
+    };
+
+    const handleZeroButton = () => {
+      requestAndZero();
     };
 
     function connectWs() {
@@ -382,7 +451,7 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
       sendCommand('handbrake');
     });
 
-    gyroButton.addEventListener('click', requestGyroAccess);
+    gyroButton.addEventListener('click', handleZeroButton);
 
     connectWs();
   </script>
