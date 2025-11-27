@@ -208,6 +208,9 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
     #status { font-size: 0.9rem; color: #555; }
     #tiltSlider { width: 80%; max-width: 400px; margin: 24px auto; display: block; }
     #angleDisplay { font-size: 1.2rem; margin-top: 12px; }
+    .gyro-section { margin-top: 16px; }
+    .gyro-section button { margin-top: 12px; }
+    #gyroStatus { font-size: 0.9rem; color: #444; margin-top: 8px; }
     .motor-controls { margin-top: 32px; display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
     button { font-size: 1rem; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; background-color: #1976d2; color: #fff; transition: background-color 0.2s ease; }
     button:active, button.active { background-color: #1259a0; }
@@ -219,6 +222,10 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
   <p id="status">Connecting…</p>
   <input type="range" min="-45" max="45" step="0.1" value="0" id="tiltSlider">
   <p id="angleDisplay">Angle: 90</p>
+  <div class="gyro-section">
+    <button id="gyroButton" type="button">Enable Gyro Control</button>
+    <p id="gyroStatus">Use the slider or enable gyro control.</p>
+  </div>
   <div class="motor-controls">
     <button id="gasButton" type="button">Gas</button>
     <button id="handbrakeButton" type="button">Handbrake</button>
@@ -231,12 +238,62 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
     const gasButton = document.getElementById('gasButton');
     const handbrakeButton = document.getElementById('handbrakeButton');
     const motorEl = document.getElementById('motorDisplay');
+    const gyroButton = document.getElementById('gyroButton');
+    const gyroStatusEl = document.getElementById('gyroStatus');
     let ws;
     let gasHeld = false;
+    let gyroEnabled = false;
+    let lastTiltSent = parseFloat(slider.value);
 
     const sendCommand = (payload) => {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(payload);
+      }
+    };
+
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+    const handleOrientation = (event) => {
+      if (!gyroEnabled) return;
+      const rawTilt = typeof event.gamma === 'number' ? event.gamma : (typeof event.beta === 'number' ? event.beta : 0);
+      const tilt = clamp(rawTilt, -45, 45);
+      if (Math.abs(tilt - lastTiltSent) < 0.5) return;
+      slider.value = tilt.toFixed(1);
+      lastTiltSent = tilt;
+      sendCommand(tilt.toFixed(2));
+    };
+
+    const startGyroStream = () => {
+      if (gyroEnabled) return;
+      window.addEventListener('deviceorientation', handleOrientation);
+      gyroEnabled = true;
+      gyroButton.textContent = 'Gyro Enabled';
+      gyroButton.disabled = true;
+      gyroStatusEl.textContent = 'Gyro control active. Tilt your device to steer.';
+    };
+
+    const requestGyroAccess = () => {
+      if (gyroEnabled) return;
+      if (typeof DeviceOrientationEvent === 'undefined') {
+        gyroStatusEl.textContent = 'Device orientation not supported on this browser.';
+        return;
+      }
+
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+          .then((state) => {
+            if (state === 'granted') {
+              startGyroStream();
+            } else {
+              gyroStatusEl.textContent = 'Gyro permission denied. Use the slider instead.';
+            }
+          })
+          .catch((err) => {
+            console.error('Gyro permission error', err);
+            gyroStatusEl.textContent = 'Unable to access gyro. Check browser settings.';
+          });
+      } else {
+        startGyroStream();
       }
     };
 
@@ -267,6 +324,7 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
           }
           if (typeof data.tilt === 'number' && slider !== document.activeElement) {
             slider.value = data.tilt;
+            lastTiltSent = parseFloat(data.tilt);
           }
           if (typeof data.motorDuty === 'number') {
             const pct = Math.round(data.motorDuty * 100);
@@ -286,6 +344,7 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
     }
 
     slider.addEventListener('input', () => {
+      lastTiltSent = parseFloat(slider.value);
       sendCommand(slider.value);
     });
 
@@ -322,6 +381,8 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
       releaseGas();
       sendCommand('handbrake');
     });
+
+    gyroButton.addEventListener('click', requestGyroAccess);
 
     connectWs();
   </script>
