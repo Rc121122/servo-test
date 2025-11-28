@@ -19,7 +19,7 @@
     body {
       margin: 0;
       font-family: 'SF Pro Display', 'Inter', Arial, sans-serif;
-      background: radial-gradient(circle at top, #0f172a 0%, #020617 45%, #01040e 100%);
+      background: #071428;
       color: #f6f9ff;
       min-height: 100vh;
       display: flex;
@@ -63,6 +63,7 @@
       display: flex;
       gap: 24px;
       align-items: stretch;
+      flex: 1 1 0;
     }
 
     .column {
@@ -184,28 +185,25 @@
     }
 
     .steering-wheel {
-      width: 180px;
-      height: 180px;
+      width: 120px;
+      height: 120px;
+      position: relative; /* ensure arrow is positioned relative to the wheel */
+      background: #041026;
       border-radius: 50%;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      margin: 0 auto 8px;
-      position: relative;
-      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), rgba(4,13,34,0.8));
-      box-shadow: inset 0 0 20px rgba(0,0,0,0.4);
-      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.06);
     }
 
     .steering-arrow {
       position: absolute;
+      left: 50%;
+      top: 50%;
       width: 0;
       height: 0;
-      border-left: 24px solid transparent;
-      border-right: 24px solid transparent;
-      border-bottom: 48px solid #4fc3f7;
-      top: 70%;
-      left: 50%;
-      transform-origin: 12px 24px;
-      transform: translateX(-50%) rotate(var(--angle, 0deg));
+      border-left: 12px solid transparent;
+      border-right: 12px solid transparent;
+      border-bottom: 24px solid #4fc3f7;
+      transform-origin: 50% 50%;
+      transform: translate(-50%, -50%) rotate(var(--angle, 0deg));
     }
 
     #tiltSlider {
@@ -286,24 +284,18 @@
         height: 120px;
       }
 
-    .steering-wheel {
-      width: 120px;
-      height: 120px;
-      position: relative; /* ensure arrow is positioned relative to the wheel */
-    }
+      .steering-wheel {
+        width: 120px;
+        height: 120px;
+      }
 
-    .steering-arrow {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 0;
-      height: 0;
-      border-left: 12px solid transparent;
-      border-right: 12px solid transparent;
-      border-bottom: 24px solid #4fc3f7;
-      transform-origin: 50% 50%;
-      transform: translate(-50%, -50%) rotate(var(--angle, 0deg));
-    }
+      .steering-arrow {
+        border-left-width: 8px;
+        border-right-width: 8px;
+        border-bottom-width: 16px;
+        top: 20px;
+        transform-origin: 8px 16px;
+      }
     }
 
     @media (max-width: 600px) {
@@ -369,7 +361,6 @@
     const motorDutyBar = document.getElementById('motorDutyBar');
     const gyroButton = document.getElementById('gyroButton');
     const gyroStatusEl = document.getElementById('gyroStatus');
-    const fullscreenButton = document.getElementById('fullscreenButton');
     let ws;
     let gasHeld = false;
     let gyroEnabled = false;
@@ -399,7 +390,7 @@
       // Not supported on iOS Safari
     };
 
-    document.addEventListener('fullscreenchange', updateFullscreenLabel);
+    // Fullscreen not used on iOS; no-op placeholder kept for compatibility.
 
     const isLandscapeOrientation = () => {
       if (window.screen?.orientation && typeof window.screen.orientation.angle === 'number') {
@@ -596,7 +587,6 @@
     gyroButton.addEventListener('click', handleZeroButton);
 
     connectWs();
-    updateFullscreenLabel();
   </script>
 </body>
 </html>

@@ -22,7 +22,7 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     body {
       margin: 0;
       font-family: 'SF Pro Display', 'Inter', Arial, sans-serif;
-      background: radial-gradient(circle at top, #0f172a 0%, #020617 45%, #01040e 100%);
+      background: #071428;
       color: #f6f9ff;
       min-height: 100vh;
       display: flex;
@@ -66,6 +66,7 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       display: flex;
       gap: 24px;
       align-items: stretch;
+      flex: 1 1 0;
     }
 
     .column {
@@ -190,6 +191,9 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       width: 120px;
       height: 120px;
       position: relative; /* ensure arrow is positioned relative to the wheel */
+      background: #041026;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.06);
     }
 
     .steering-arrow {
@@ -360,7 +364,6 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     const motorDutyBar = document.getElementById('motorDutyBar');
     const gyroButton = document.getElementById('gyroButton');
     const gyroStatusEl = document.getElementById('gyroStatus');
-    const fullscreenButton = document.getElementById('fullscreenButton');
     let ws;
     let gasHeld = false;
     let gyroEnabled = false;
@@ -390,7 +393,7 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       // Not supported on iOS Safari
     };
 
-    document.addEventListener('fullscreenchange', updateFullscreenLabel);
+    // Fullscreen not used on iOS; no-op placeholder kept for compatibility.
 
     const isLandscapeOrientation = () => {
       if (window.screen?.orientation && typeof window.screen.orientation.angle === 'number') {
@@ -587,7 +590,6 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     gyroButton.addEventListener('click', handleZeroButton);
 
     connectWs();
-    updateFullscreenLabel();
   </script>
 </body>
 </html>
