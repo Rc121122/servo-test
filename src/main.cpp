@@ -19,12 +19,13 @@
 using namespace httpsserver;
 
 // ====== User settings ======
-const char *ssid = "MyESP32_AP";
-const char *password = "esp32password";
+const char *ssid = "RC_Car_AP";
+const char *password = "RCcar1234";
 
 const int servoPin = 19;      // GPIO connected to servo signal
 const int servoMin = 0;       // Servo angle minimum
 const int servoMax = 180;     // Servo angle maximum
+constexpr int servodirection_inverse = 1;
 const float tiltMin = -45.0f; // phone tilt min (degrees)
 const float tiltMax = +45.0f; // phone tilt max
 
@@ -81,6 +82,7 @@ int mapTiltToAngle(float tilt) {
   if (tilt < tiltMin) tilt = tiltMin;
   if (tilt > tiltMax) tilt = tiltMax;
   float norm = (tilt - tiltMin) / (tiltMax - tiltMin);
+  if (servodirection_inverse) norm = 1.0f - norm;
   return servoMin + static_cast<int>(norm * (servoMax - servoMin));
 }
 
