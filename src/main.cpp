@@ -23,8 +23,8 @@ const char *ssid = "RC_Car_AP";
 const char *password = "RCcar1234";
 
 const int servoPin = 19;      // GPIO connected to servo signal
-const int servoMin = 0;       // Servo angle minimum
-const int servoMax = 180;     // Servo angle maximum
+const int servoMin = 40;      // Servo angle minimum
+const int servoMax = 130;     // Servo angle maximum
 constexpr int servodirection_inverse = 1;
 const float tiltMin = -45.0f; // phone tilt min (degrees)
 const float tiltMax = +45.0f; // phone tilt max
@@ -37,8 +37,8 @@ constexpr uint8_t MAX_WS_CLIENTS = 4;
 constexpr uint8_t servoChannel = 0;
 constexpr uint32_t servoFreq = 50;          // 50 Hz for standard servos
 constexpr uint8_t servoResolution = 15;     // 15-bit resolution
-constexpr int servoPulseMinUs = 500;        // Minimum pulse width
-constexpr int servoPulseMaxUs = 2400;       // Maximum pulse width
+constexpr int servoPulseMinUs = 922;        // Minimum pulse width for 40°
+constexpr int servoPulseMaxUs = 1872;       // Maximum pulse width for 130°
 constexpr uint32_t servoPeriodUs = 20000;   // 20 ms period at 50 Hz
 
 // ====== Motor PWM config ======
