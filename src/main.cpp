@@ -30,6 +30,7 @@ const float tiltMin = -45.0f; // phone tilt min (degrees)
 const float tiltMax = +45.0f; // phone tilt max
 
 const int motorPwmPin = 18;   // GPIO connected to ESC / motor driver input
+const int headlightPin = 33;  // GPIO connected to headlight
 
 constexpr uint8_t MAX_WS_CLIENTS = 4;
 
@@ -57,6 +58,7 @@ float motorDuty = 0.0f;
 bool gasPressed = false;
 unsigned long lastMotorUpdateMs = 0;
 float lastBroadcastMotorDuty = -1.0f;
+bool headlightOn = false;
 
 SSLCert cert(serverCertDer, serverCertDerLen, serverKeyDer, serverKeyDerLen);
 HTTPSServer secureServer(&cert, 443, MAX_WS_CLIENTS);
@@ -67,6 +69,7 @@ void updateMotorControl();
 void writeMotorDuty(float duty);
 void applyHandbrake();
 void broadcastState();
+void setHeadlight(bool on);
 
 class SteeringWebsocket : public WebsocketHandler {
 public:
@@ -111,6 +114,12 @@ void applyHandbrake() {
   broadcastState();
 }
 
+void setHeadlight(bool on) {
+  headlightOn = on;
+  digitalWrite(headlightPin, on ? HIGH : LOW);
+  broadcastState();
+}
+
 void updateMotorControl() {
   const unsigned long now = millis();
   const unsigned long elapsed = now - lastMotorUpdateMs;
@@ -143,6 +152,9 @@ void broadcastState() {
 void setup() {
   Serial.begin(115200);
   Serial.println("Starting ESP32 Steering HTTPS server...");
+
+  pinMode(headlightPin, OUTPUT);
+  digitalWrite(headlightPin, LOW);
 
   ledcSetup(servoChannel, servoFreq, servoResolution);
   ledcAttachPin(servoPin, servoChannel);
@@ -222,7 +234,7 @@ void SteeringWebsocket::onClose() {
 
 void SteeringWebsocket::sendState() {
   char payload[64];
-  snprintf(payload, sizeof(payload), "{\"angle\":%d,\"tilt\":%.2f,\"motorDuty\":%.3f,\"gas\":%s}", currentAngle, currentTilt, motorDuty, gasPressed ? "true" : "false");
+  snprintf(payload, sizeof(payload), "{\"angle\":%d,\"tilt\":%.2f,\"motorDuty\":%.3f,\"gas\":%s,\"headlight\":%s}", currentAngle, currentTilt, motorDuty, gasPressed ? "true" : "false", headlightOn ? "true" : "false");
   send(std::string(payload), WebsocketHandler::SEND_TYPE_TEXT);
 }
 
@@ -254,6 +266,16 @@ void SteeringWebsocket::onMessage(WebsocketInputStreambuf *input) {
 
   if (message == "handbrake") {
     applyHandbrake();
+    return;
+  }
+
+  if (message == "headlight_on") {
+    setHeadlight(true);
+    return;
+  }
+
+  if (message == "headlight_off") {
+    setHeadlight(false);
     return;
   }
 

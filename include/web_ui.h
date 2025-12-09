@@ -316,6 +316,7 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       </div>
       <div class="button-row">
         <button id="gyroButton" type="button">Zero Gyro</button>
+        <button id="headlightButton" type="button">Headlight</button>
       </div>
       <p id="gyroStatus">Tap “Zero Gyro” to grant motion access and calibrate the current wheel position.</p>
     </header>
@@ -364,6 +365,7 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     const motorDutyBar = document.getElementById('motorDutyBar');
     const gyroButton = document.getElementById('gyroButton');
     const gyroStatusEl = document.getElementById('gyroStatus');
+    const headlightButton = document.getElementById('headlightButton');
     let ws;
     let gasHeld = false;
     let gyroEnabled = false;
@@ -371,6 +373,7 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     let lastTiltSent = parseFloat(slider.value);
     let lastRawWheel = 0;
     let gyroZeroOffset = 0;
+    let headlightOn = false;
 
     const setSteeringIndicator = (tiltDegrees) => {
       const arrow = document.getElementById('steeringArrow');
@@ -541,6 +544,10 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
           if (typeof data.gas === 'boolean') {
             gasButton.classList.toggle('active', data.gas);
           }
+          if (typeof data.headlight === 'boolean') {
+            headlightOn = data.headlight;
+            headlightButton.classList.toggle('active', headlightOn);
+          }
         } catch (err) {
           console.error('Invalid payload', err);
         }
@@ -588,6 +595,12 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     });
 
     gyroButton.addEventListener('click', handleZeroButton);
+
+    headlightButton.addEventListener('click', () => {
+      headlightOn = !headlightOn;
+      headlightButton.classList.toggle('active', headlightOn);
+      sendCommand(headlightOn ? 'headlight_on' : 'headlight_off');
+    });
 
     connectWs();
   </script>
