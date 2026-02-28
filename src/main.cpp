@@ -65,6 +65,8 @@ HTTPSServer secureServer(&cert, 443, MAX_WS_CLIENTS);
 
 void handleRoot(HTTPRequest *req, HTTPResponse *res);
 void handle404(HTTPRequest *req, HTTPResponse *res);
+void handleManifest(HTTPRequest *req, HTTPResponse *res);
+void handleIcon(HTTPRequest *req, HTTPResponse *res);
 void updateMotorControl();
 void writeMotorDuty(float duty);
 void applyHandbrake();
@@ -175,6 +177,15 @@ void setup() {
   ResourceNode *rootNode = new ResourceNode("/", "GET", &handleRoot);
   secureServer.registerNode(rootNode);
 
+  ResourceNode *manifestNode = new ResourceNode("/manifest.json", "GET", &handleManifest);
+  secureServer.registerNode(manifestNode);
+
+  ResourceNode *icon192Node = new ResourceNode("/icon-192.png", "GET", &handleIcon);
+  secureServer.registerNode(icon192Node);
+
+  ResourceNode *icon512Node = new ResourceNode("/icon-512.png", "GET", &handleIcon);
+  secureServer.registerNode(icon512Node);
+
   WebsocketNode *wsNode = new WebsocketNode("/ws", &SteeringWebsocket::create);
   secureServer.registerNode(wsNode);
 
@@ -211,6 +222,27 @@ void handleRoot(HTTPRequest *req, HTTPResponse *res) {
   req->discardRequestBody();
   res->setHeader("Content-Type", "text/html");
   res->println(WEB_UI_HTML);
+}
+
+void handleManifest(HTTPRequest *req, HTTPResponse *res) {
+  req->discardRequestBody();
+  res->setHeader("Content-Type", "application/manifest+json");
+  res->println(MANIFEST_JSON);
+}
+
+void handleIcon(HTTPRequest *req, HTTPResponse *res) {
+  req->discardRequestBody();
+  res->setHeader("Content-Type", "image/png");
+  // Minimal 1x1 transparent PNG (43 bytes)
+  const uint8_t minimalPNG[] = {
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+    0x0B, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+    0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82
+  };
+  res->write(minimalPNG, sizeof(minimalPNG));
 }
 
 WebsocketHandler *SteeringWebsocket::create() {

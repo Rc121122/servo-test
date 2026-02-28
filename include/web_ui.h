@@ -1,12 +1,42 @@
 #pragma once
 
+static const char MANIFEST_JSON[] = R"JSON({
+  "name": "遙控車控制器",
+  "short_name": "遙控車",
+  "description": "遙控車操作介面",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#071428",
+  "theme_color": "#071428",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+})JSON";
+
 static const char WEB_UI_HTML[] = R"HTMLDOC(
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant-TW">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>RC Car Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="遙控車控制器">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#071428">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <title>遙控車控制器</title>
   <style>
     :root {
       color-scheme: dark;
@@ -17,14 +47,28 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       --warning: #ffb74d;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: manipulation;
+    }
 
     body {
       margin: 0;
       font-family: 'SF Pro Display', 'Inter', Arial, sans-serif;
       background: #071428;
       color: #f6f9ff;
-      min-height: 100vh;
+      min-height: 100dvh;
+      height: 100dvh;
       display: flex;
       align-items: stretch;
       justify-content: center;
@@ -54,11 +98,11 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     @media (orientation: landscape) {
       main {
         width: 100vw;
-        height: 100vh;
+        height: 100dvh;
         border-radius: 0;
         border: none;
-        padding: 20px;
-        gap: 16px;
+        padding: 12px;
+        gap: 10px;
       }
     }
 
@@ -67,6 +111,7 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       gap: 24px;
       align-items: stretch;
       flex: 1 1 0;
+      min-height: 0;
     }
 
     .column {
@@ -74,15 +119,11 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       display: flex;
       flex-direction: column;
       gap: 24px;
-    }
-
-    .mid-column {
-      flex: 0 0 200px;
-      justify-content: center;
+      min-height: 0;
     }
 
     .throttle-column {
-      flex: 0 0 320px;
+      flex: 0 0 clamp(200px, 31vw, 360px);
     }
 
     h1 {
@@ -142,33 +183,37 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     .throttle-buttons {
       display: flex;
       flex-direction: column;
-      gap: 20px;
-      align-items: center;
+      gap: clamp(10px, 2vh, 20px);
+      align-items: stretch;
+      width: min(260px, 100%);
     }
 
-    .circle-button {
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
+    .pedal-button {
+      width: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.1rem;
-      padding: 0;
+      font-size: clamp(0.85rem, 2.1vh, 1.1rem);
+      padding: 0 14px;
       border: 2px solid rgba(255, 255, 255, 0.25);
       color: #fff;
       font-weight: 600;
+      border-radius: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
     }
 
     .gas-btn {
       background: #2196f3;
+      height: clamp(74px, 20vh, 140px);
     }
 
     .brake-btn {
       background: #f44336;
+      height: clamp(48px, 11vh, 76px);
     }
 
-    .circle-button:active, .circle-button.active {
+    .pedal-button:active, .pedal-button.active {
       opacity: 0.8;
     }
 
@@ -180,6 +225,7 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       display: flex;
       flex-direction: column;
       flex: 1;
+      min-height: 0;
     }
 
     .steering-value {
@@ -188,8 +234,8 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     }
 
     .steering-wheel {
-      width: 120px;
-      height: 120px;
+      width: clamp(96px, 26vh, 140px);
+      height: clamp(96px, 26vh, 140px);
       position: relative; /* ensure arrow is positioned relative to the wheel */
       background: #041026;
       border-radius: 50%;
@@ -200,19 +246,42 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       position: absolute;
       left: 50%;
       top: 50%;
-      width: 0;
-      height: 0;
-      border-left: 12px solid transparent;
-      border-right: 12px solid transparent;
-      border-bottom: 24px solid #4fc3f7;
+      width: 16px;
+      height: 56px;
       transform-origin: 50% 50%;
       transform: translate(-50%, -50%) rotate(var(--angle, 0deg));
+    }
+
+    .steering-arrow::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      width: 4px;
+      height: 40px;
+      border-radius: 999px;
+      background: #4fc3f7;
+      box-shadow: 0 0 10px rgba(79, 195, 247, 0.5);
+    }
+
+    .steering-arrow::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 0;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 10px solid transparent;
+      border-right: 10px solid transparent;
+      border-bottom: 16px solid #4fc3f7;
     }
 
     #tiltSlider {
       width: 100%;
       appearance: none;
-      height: 12px;
+      height: 18px;
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.15);
       outline: none;
@@ -220,8 +289,8 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
 
     #tiltSlider::-webkit-slider-thumb {
       appearance: none;
-      width: 26px;
-      height: 26px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       background: var(--accent);
       box-shadow: 0 6px 20px rgba(79, 195, 247, 0.45);
@@ -229,11 +298,16 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     }
 
     #tiltSlider::-moz-range-thumb {
-      width: 26px;
-      height: 26px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       background: var(--accent);
       border: none;
+    }
+
+    instructions {
+      font-size: 0.5rem;
+      color: rgba(255, 255, 255, 0.7);
     }
 
     section.card p {
@@ -248,14 +322,38 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     }
 
     .motor-meter {
-      width: 40px;
-      height: 200px;
+      width: clamp(24px, 4.5vw, 40px);
+      height: clamp(110px, 44vh, 210px);
       border-radius: 20px;
       background: #0d47a1;
       overflow: hidden;
       border: 1px solid rgba(255, 255, 255, 0.2);
       margin: 0 auto;
       position: relative;
+    }
+
+    @media (orientation: landscape) and (max-height: 430px) {
+      body {
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      }
+
+      main {
+        padding: 10px 12px;
+        gap: 8px;
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 8px 12px;
+      }
+
+      h1 { font-size: 1rem; }
+
+      #status { font-size: 0.78rem; }
+
+      }
     }
 
     #motorDutyBar {
@@ -276,15 +374,8 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     }
 
     @media (orientation: portrait) or (max-width: 900px) {
-      .circle-button {
-        width: 60px;
-        height: 60px;
+      .pedal-button {
         font-size: 0.8rem;
-      }
-
-      .motor-meter {
-        width: 24px;
-        height: 120px;
       }
 
       .steering-wheel {
@@ -293,11 +384,18 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       }
 
       .steering-arrow {
+        width: 14px;
+        height: 44px;
+      }
+
+      .steering-arrow::before {
+        height: 30px;
+      }
+
+      .steering-arrow::after {
         border-left-width: 8px;
         border-right-width: 8px;
-        border-bottom-width: 16px;
-        top: 20px;
-        transform-origin: 8px 16px;
+        border-bottom-width: 14px;
       }
     }
 
@@ -305,20 +403,41 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       main { border-radius: 16px; }
       button { flex: 1; text-align: center; }
     }
+
+    #orientationGuard {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      background: rgba(2, 8, 20, 0.96);
+      color: #f6f9ff;
+      font-size: 1.05rem;
+      line-height: 1.5;
+      letter-spacing: 0.02em;
+    }
+
+    #orientationGuard.show {
+      display: flex;
+    }
   </style>
 </head>
 <body>
+  <div id="orientationGuard">請將手機旋轉為橫向，以使用遙控介面。</div>
   <main>
     <header>
       <div>
-        <h1>RC Car Controller</h1>
-        <p id="status">Connecting…</p>
+        <h1>遙控車控制器</h1>
+        <p id="status">連線中…</p>
       </div>
       <div class="button-row">
-        <button id="gyroButton" type="button">Zero Gyro</button>
-        <button id="headlightButton" type="button">Headlight</button>
+        <button id="gyroButton" type="button">陀螺儀歸零</button>
+        <button id="headlightButton" type="button">頭燈</button>
       </div>
-      <p id="gyroStatus">Tap “Zero Gyro” to grant motion access and calibrate the current wheel position.</p>
+      <p id="gyroStatus">點選「陀螺儀歸零」以授權動作感測，並校正目前方向盤位置。</p>
     </header>
 
     <div class="control-grid">
@@ -327,28 +446,20 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
           <div class="steering-wheel" id="steeringWheel">
             <div class="steering-arrow" id="steeringArrow"></div>
           </div>
-          <div class="steering-value" id="angleDisplay">Steering: 90°</div>
+          <div class="steering-value" id="angleDisplay">方向：90°</div>
           <input type="range" min="-45" max="45" step="0.1" value="0" id="tiltSlider">
-          <p>Slide or tilt (landscape) to steer.</p>
-        </section>
-      </div>
-
-      <div class="column mid-column">
-        <section class="card duty-card">
-          <div class="duty-title">Motor Power</div>
-          <div class="motor-meter"><div id="motorDutyBar"></div></div>
-          <p id="motorDisplay">0%</p>
+          <p>可拖曳滑桿或在橫向模式下傾斜手機轉向。</p>
         </section>
       </div>
 
       <div class="column throttle-column">
         <section class="card throttle-card">
-          <div class="throttle-title">Throttle</div>
+          <div class="throttle-title">油門 / 煞車</div>
           <div class="throttle-buttons">
-            <button class="circle-button gas-btn" id="gasButton" type="button">Gas</button>
-            <button class="circle-button brake-btn" id="handbrakeButton" type="button">Brake</button>
+            <button class="pedal-button gas-btn" id="gasButton" type="button">油門</button>
+            <button class="pedal-button brake-btn" id="handbrakeButton" type="button">煞車</button>
           </div>
-          <p>Hold Gas to accelerate. Tap Brake to cut power.</p>
+          <p class="instructions">按住油門加速</p>
         </section>
       </div>
     </div>
@@ -361,8 +472,6 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     const steeringWheel = document.getElementById('steeringWheel');
     const gasButton = document.getElementById('gasButton');
     const handbrakeButton = document.getElementById('handbrakeButton');
-    const motorEl = document.getElementById('motorDisplay');
-    const motorDutyBar = document.getElementById('motorDutyBar');
     const gyroButton = document.getElementById('gyroButton');
     const gyroStatusEl = document.getElementById('gyroStatus');
     const headlightButton = document.getElementById('headlightButton');
@@ -374,6 +483,8 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
     let lastRawWheel = 0;
     let gyroZeroOffset = 0;
     let headlightOn = false;
+    const orientationGuard = document.getElementById('orientationGuard');
+    const isStandalonePwa = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
     const setSteeringIndicator = (tiltDegrees) => {
       const arrow = document.getElementById('steeringArrow');
@@ -388,15 +499,23 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
 
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-    const updateFullscreenLabel = () => {
-      // Removed for iOS compatibility
-    };
+    document.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+    });
 
-    const toggleFullscreen = () => {
-      // Not supported on iOS Safari
-    };
+    document.addEventListener('gesturestart', (event) => {
+      event.preventDefault();
+    });
 
-    // Fullscreen not used on iOS; no-op placeholder kept for compatibility.
+    document.addEventListener('touchmove', (event) => {
+      if (!event.target.closest('#tiltSlider')) {
+        event.preventDefault();
+      }
+    }, { passive: false });
+
+    document.addEventListener('dblclick', (event) => {
+      event.preventDefault();
+    });
 
     const isLandscapeOrientation = () => {
       if (window.screen?.orientation && typeof window.screen.orientation.angle === 'number') {
@@ -407,6 +526,40 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       }
       return window.innerWidth > window.innerHeight;
     };
+
+    const updateOrientationGuard = () => {
+      if (!isStandalonePwa) {
+        orientationGuard.classList.remove('show');
+        return;
+      }
+      orientationGuard.classList.toggle('show', !isLandscapeOrientation());
+    };
+
+    const requestLandscapeLock = async () => {
+      if (!isStandalonePwa) return;
+      if (window.screen?.orientation?.lock) {
+        try {
+          await window.screen.orientation.lock('landscape');
+        } catch (_) {
+        }
+      }
+      updateOrientationGuard();
+    };
+
+    window.addEventListener('orientationchange', () => {
+      updateOrientationGuard();
+      requestLandscapeLock();
+    });
+
+    window.addEventListener('resize', updateOrientationGuard);
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        requestLandscapeLock();
+      }
+    });
+
+    document.addEventListener('pointerdown', requestLandscapeLock, { once: true });
 
     const computeWheelRotation = (event) => {
       if (isLandscapeOrientation() && typeof event.beta === 'number') {
@@ -437,14 +590,14 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       if (gyroEnabled) return;
       window.addEventListener('deviceorientation', handleOrientation);
       gyroEnabled = true;
-      gyroStatusEl.textContent = 'Gyro ready. Tap “Zero Gyro” any time to recenter the steering wheel.';
+      gyroStatusEl.textContent = '陀螺儀已啟用，可隨時再次點選「陀螺儀歸零」重新校正。';
     };
 
     const ensureGyroAccess = () => {
       if (gyroEnabled) return Promise.resolve();
       if (gyroRequestInFlight) return Promise.reject(new Error('pending'));
       gyroRequestInFlight = true;
-      gyroStatusEl.textContent = 'Requesting motion access…';
+      gyroStatusEl.textContent = '正在要求動作感測權限…';
 
       return new Promise((resolve, reject) => {
         if (typeof DeviceOrientationEvent === 'undefined') {
@@ -482,7 +635,7 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
 
     const zeroGyro = () => {
       gyroZeroOffset = lastRawWheel;
-      gyroStatusEl.textContent = 'Steering centered. Rotate the device like a wheel.';
+      gyroStatusEl.textContent = '已完成方向置中，請像轉方向盤一樣旋轉手機。';
     };
 
     const handleZeroButton = () => {
@@ -493,13 +646,13 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
         .catch((err) => {
           console.error('Gyro access error', err);
           if (err?.message === 'unsupported') {
-            gyroStatusEl.textContent = 'Device orientation not supported. Use the slider instead.';
+            gyroStatusEl.textContent = '裝置不支援方向感測，請改用滑桿控制。';
           } else if (err?.message === 'denied') {
-            gyroStatusEl.textContent = 'Motion access denied. Check Safari Settings ▸ Motion & Orientation.';
+            gyroStatusEl.textContent = '已拒絕動作權限，請到 Safari 設定開啟「動作與方向存取」。';
           } else if (err?.message === 'pending') {
-            gyroStatusEl.textContent = 'Motion access already requested…';
+            gyroStatusEl.textContent = '權限要求進行中…';
           } else {
-            gyroStatusEl.textContent = 'Unable to start gyro. Try again.';
+            gyroStatusEl.textContent = '無法啟用陀螺儀，請再試一次。';
           }
         });
     };
@@ -509,17 +662,17 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       ws = new WebSocket(proto + location.host + '/ws');
 
       ws.onopen = () => {
-        statusEl.textContent = 'Connected';
+        statusEl.textContent = '已連線';
         sendCommand('sync');
       };
 
       ws.onclose = () => {
-        statusEl.textContent = 'Disconnected, retrying…';
+        statusEl.textContent = '已斷線，重新連線中…';
         setTimeout(connectWs, 2000);
       };
 
       ws.onerror = () => {
-        statusEl.textContent = 'WebSocket error';
+        statusEl.textContent = 'WebSocket 錯誤';
         ws.close();
       };
 
@@ -527,7 +680,7 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
         try {
           const data = JSON.parse(event.data);
           if (typeof data.angle === 'number') {
-            angleEl.textContent = `Steering: ${data.angle}°`;
+            angleEl.textContent = `方向：${data.angle}°`;
             const normalizedTilt = clamp(data.angle - 90, -45, 45);
             setSteeringIndicator(normalizedTilt);
           }
@@ -535,11 +688,6 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
             slider.value = data.tilt;
             lastTiltSent = parseFloat(data.tilt);
             setSteeringIndicator(lastTiltSent);
-          }
-          if (typeof data.motorDuty === 'number') {
-            const pct = Math.round(data.motorDuty * 100);
-            motorEl.textContent = `${pct}%`;
-            motorDutyBar.style.height = `${pct}%`;
           }
           if (typeof data.gas === 'boolean') {
             gasButton.classList.toggle('active', data.gas);
@@ -602,6 +750,8 @@ static const char WEB_UI_HTML[] = R"HTMLDOC(
       sendCommand(headlightOn ? 'headlight_on' : 'headlight_off');
     });
 
+    requestLandscapeLock();
+    updateOrientationGuard();
     connectWs();
   </script>
 </body>
